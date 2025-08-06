@@ -1,0 +1,148 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 무령왕릉 도슨트</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 스크롤바 디자인 (선택 사항) */
+        #chatbox::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chatbox::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #chatbox::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        #chatbox::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen font-sans">
+
+    <div class="w-full max-w-2xl h-[90vh] flex flex-col bg-white shadow-2xl rounded-lg">
+        <!-- 헤더 -->
+        <header class="flex items-center justify-between p-4 border-b bg-gray-50 rounded-t-lg">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center text-white text-xl font-bold mr-3">AI</div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">AI 무령왕릉 도슨트</h1>
+                    <p class="text-sm text-green-500 flex items-center">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>
+                        온라인
+                    </p>
+                </div>
+            </div>
+            <button id="newChatBtn" class="text-sm text-gray-600 hover:text-gray-900 font-semibold py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors">
+                새 대화 시작
+            </button>
+        </header>
+
+        <!-- 채팅창 -->
+        <main id="chatbox" class="flex-1 p-6 overflow-y-auto bg-white">
+            <!-- 메시지가 여기에 동적으로 추가됩니다 -->
+        </main>
+
+        <!-- 입력창 -->
+        <footer class="p-4 border-t bg-gray-50 rounded-b-lg">
+            <form id="chatForm" class="flex items-center">
+                <input type="text" id="userInput" class="flex-1 w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="무령왕릉에 대해 무엇이든 물어보세요..." autocomplete="off">
+                <button type="submit" class="ml-3 bg-indigo-600 text-white rounded-full p-3 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                    </svg>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <script>
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const chatbox = document.getElementById('chatbox');
+        const newChatBtn = document.getElementById('newChatBtn');
+
+        // 페이지 로드 시 시작 메시지
+        window.onload = () => {
+             appendMessage({ text: '안녕하세요! 저는 무령왕릉 전문 AI 도슨트입니다. 무엇을 도와드릴까요?', type: 'bot' });
+        };
+
+        newChatBtn.addEventListener('click', async () => {
+            await fetch('/clear', { method: 'POST' });
+            chatbox.innerHTML = '';
+            appendMessage({ text: '새로운 대화를 시작합니다. 무엇이든 물어보세요.', type: 'bot' });
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = userInput.value.trim();
+            if (!query) return;
+
+            appendMessage({ text: query, type: 'user' });
+            userInput.value = '';
+            
+            const loadingIndicator = appendMessage({ text: '...', type: 'loading' });
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                chatbox.removeChild(loadingIndicator);
+
+                if (!response.ok) throw new Error('서버 오류');
+                const data = await response.json();
+
+                if (data.error) {
+                    appendMessage({ text: `오류: ${data.error}`, type: 'bot' });
+                } else {
+                    appendMessage({ 
+                        text: data.answer, 
+                        type: 'bot',
+                        metadata: data.metadata 
+                    });
+                }
+            } catch (error) {
+                chatbox.removeChild(loadingIndicator);
+                appendMessage({ text: '답변을 가져오는 데 실패했습니다.', type: 'bot' });
+            }
+        });
+
+        function appendMessage(msg) {
+            const msgDiv = document.createElement('div');
+            let content = '';
+
+            if (msg.type === 'user') {
+                msgDiv.className = 'flex justify-end mb-4';
+                content = `<div class="bg-indigo-500 text-white rounded-lg py-2 px-4 max-w-lg">${msg.text}</div>`;
+            } else if (msg.type === 'bot') {
+                let botHtml = msg.text.replace(/\n/g, '<br>');
+                if (msg.metadata && msg.metadata.length > 0) {
+                    const meta = msg.metadata[0];
+                    botHtml += '<div class="mt-2 text-xs text-gray-600 border-t pt-2">';
+                    if (meta.MUCH_URL) botHtml += `<a href="${meta.MUCH_URL}" target="_blank" class="text-indigo-600 hover:underline">자세히 보기</a>`;
+                    if (meta.image_url) botHtml += ` | <a href="${meta.image_url}" target="_blank" class="text-indigo-600 hover:underline">이미지 보기</a>`;
+                    botHtml += '</div>';
+                }
+                msgDiv.className = 'flex justify-start mb-4';
+                content = `<div class="bg-gray-200 text-gray-800 rounded-lg py-2 px-4 max-w-lg">${botHtml}</div>`;
+            } else { // loading
+                 msgDiv.className = 'flex justify-start mb-4';
+                 content = `<div class="bg-gray-200 text-gray-500 rounded-lg py-2 px-4">● ● ●</div>`;
+            }
+            
+            msgDiv.innerHTML = content;
+            chatbox.appendChild(msgDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            return msgDiv;
+        }
+    </script>
+</body>
+</html>
