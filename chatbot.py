@@ -10,6 +10,7 @@ import json
 from dotenv import load_dotenv
 
 class RAGChatbot:
+    # ... (__new__, __init__, _load_vector_store, _semantic_route_query, _search 함수는 이전과 동일합니다) ...
     _instance = None
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -109,29 +110,28 @@ class RAGChatbot:
 
         retrieved_docs = self._search(query, route)
         
-        # (⭐ 핵심 수정) 컨텍스트 생성 시 '소장품번호' 명시적으로 추가
         context_for_llm = ""
         for doc in retrieved_docs:
             source = doc.get('source_file', '유물 DB')
             context_for_llm += f"### 참고 자료 (출처: {source}) ###\n"
-            
-            # 유물인 경우, 구조화된 정보 추가
             if '명칭' in doc and not doc.get('source_file'):
                 context_for_llm += f"유물명: {doc.get('명칭', 'N/A')}\n"
-                context_for_llm += f"소장품번호: {doc.get('소장품번호', 'N/A')}\n" # 명시적 라벨링
-            
+                context_for_llm += f"소장품번호: {doc.get('소장품번호', 'N/A')}\n"
             context_for_llm += f"내용: {doc.get('rag_document') or doc.get('text_chunk')}\n"
-            
             if 'MUCH_URL' in doc and doc['MUCH_URL']:
                 context_for_llm += f"관련 링크: {doc['MUCH_URL']}\n"
             context_for_llm += "\n"
 
         formatted_history = "\n".join([f"{msg['role']}: {msg['parts'][0]}" for msg in chat_history])
         
-        # (⭐ 핵심 수정) 프롬프트에 '소장품번호' 관련 지시사항 추가
+        # (⭐ 핵심 수정) 프롬프트의 지시사항을 더 명확하게 변경
         prompt = f"""당신은 국립공주박물관의 전문 AI 도슨트입니다.
 당신의 임무는 반드시 아래 [이전 대화 내용]과 [참고 자료]에만 근거하여 사용자의 마지막 [질문]에 대해 답변하는 것입니다.
-'유물번호' 또는 '소장품번호'를 물어보면, 반드시 참고 자료에 명시된 '소장품번호' 값을 사용하여 답변해야 합니다.
+답변은 친절하고 이해하기 쉬운 설명체로 작성해주세요.
+
+[중요 규칙]
+- 일반적인 유물 설명에는 절대로 '소장품번호'와 같은 내부 관리 번호를 포함하지 마세요.
+- 단, 사용자가 '유물번호'나 '소장품번호'를 명시적으로 물어보는 경우에만, 참고 자료에 있는 '소장품번호' 값을 사용하여 답변해야 합니다.
 
 ---
 [이전 대화 내용]
