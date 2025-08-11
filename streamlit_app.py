@@ -17,20 +17,86 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- Custom CSS (다크 모드) ---
+# --- (⭐ 핵심 GUI 개선) Custom CSS - 가독성 향상 ---
 st.markdown("""
 <style>
-    /* ... (이전과 동일한 CSS 코드) ... */
-    .stApp { background-color: #0E1117; }
-    [data-testid="main-container"] { background-color: #161A21; border-radius: 10px; padding: 2rem; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-    .sidebar-container { background-color: #0E1117; border: 1px solid #262730; border-radius: 10px; padding: 1.5rem 1rem; height: 100%; }
-    h1, h2, h3, h4, h5, h6 { color: #FAFAFA; } .stCaption { color: #A0A0A0; }
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageContent-user"]) { background-color: #4F46E5; border-radius: 15px; }
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageContent-assistant"]) { background-color: #374151; border-radius: 15px; }
-    .stButton>button { border-radius: 8px; border: 1px solid #4B5563; background-color: #374151; color: #F3F4F6; transition: all 0.2s; font-weight: 500; }
-    .stButton>button:hover { background-color: #4B5563; border-color: #6B7280; color: #FFFFFF; }
+    /* 전체 배경 및 기본 폰트 색상 */
+    .stApp {
+        background-color: #0E1117;
+        color: #EAEAEA; /* (⭐ 수정) 기본 텍스트 색상을 밝게 설정 */
+    }
+    
+    /* 메인 컨테이너 */
+    [data-testid="main-container"] {
+        background-color: #161A21;
+        border-radius: 10px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    /* 사이드바 컨테이너 */
+    .sidebar-container {
+        background-color: #0E1117;
+        border: 1px solid #262730;
+        border-radius: 10px;
+        padding: 1.5rem 1rem;
+        height: 100%;
+    }
+    
+    /* 제목 및 캡션 색상 */
+    h1, h2, h3, h4, h5, h6 {
+        color: #FFFFFF; /* (⭐ 수정) 더 선명한 흰색으로 변경 */
+    }
+    .stCaption {
+        color: #B0B0B0; /* (⭐ 수정) 캡션 색상을 더 밝게 변경 */
+    }
+
+    /* 사용자 채팅 버블 */
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageContent-user"]) {
+        background-color: #4F46E5;
+        border-radius: 15px;
+    }
+    div[data-testid="stChatMessageContent-user"] p {
+        color: #FFFFFF;
+    }
+
+    /* 챗봇 채팅 버블 */
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageContent-assistant"]) {
+        background-color: #374151;
+        border-radius: 15px;
+    }
+    div[data-testid="stChatMessageContent-assistant"] p {
+        color: #F3F4F6; /* (⭐ 수정) 챗봇 답변 텍스트를 더 밝게 변경 */
+    }
+    
+    /* 추천/사이드바 버튼 스타일 */
+    .stButton>button {
+        border-radius: 8px;
+        border: 1px solid #4B5563;
+        background-color: #374151;
+        color: #F9FAFB; /* (⭐ 수정) 버튼 텍스트를 더 밝게 변경 */
+        transition: all 0.2s ease-in-out;
+        font-weight: 500;
+    }
+    .stButton>button:hover {
+        background-color: #4B5563;
+        border-color: #6B7280;
+        color: #FFFFFF;
+    }
+
+    /* 채팅 입력창 스타일 */
+    .stChatInput {
+        background-color: #161A21;
+    }
+    [data-testid="stChatInput"] textarea {
+        background-color: #0E1117;
+        color: #FAFAFA;
+        border-radius: 10px;
+        border: 1px solid #262730;
+    }
 </style>
 """, unsafe_allow_html=True)
+
 
 # --- 세션 상태 초기화 ---
 if "chat_history" not in st.session_state:
@@ -132,5 +198,6 @@ with st.container():
         if st.button("새 대화 시작", use_container_width=True, key="new_chat_sidebar"):
             st.session_state.chat_history = []; st.session_state.mentioned_artifacts = {}; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
+
 
     st.markdown('</div>', unsafe_allow_html=True)
