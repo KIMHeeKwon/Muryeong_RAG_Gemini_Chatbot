@@ -115,7 +115,7 @@ with st.sidebar:
         if isinstance(jinmyo_avatar, Image.Image):
             st.image(jinmyo_avatar)
     with col2:
-        st.title("MUCH")
+        st.header("무령왕릉 도슨트 '진묘'")
     
     if st.button("새 대화 시작", use_container_width=True, key="new_chat_sidebar"):
         st.session_state.chat_history = []
@@ -135,7 +135,7 @@ with st.sidebar:
 # 대화가 없을 때만 환영 메시지 및 추천 질문 표시
 if not st.session_state.chat_history:
     st.title("무령왕릉 도슨트 '진묘'")
-    st.caption("안녕하세요! 저는 백제 무령왕릉을 지키는 도슨트 '진묘'입니다.")
+    st.caption("안녕하세요! 저는 백제 무령왕릉에 대해서 알려주는 도슨트 '진묘'입니다.")
     st.markdown("---")
     
     st.markdown("##### ✨ 이런 질문은 어떠세요?")
