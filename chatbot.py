@@ -44,28 +44,17 @@ class RAGChatbot:
             df = pickle.load(f)
         return index, df
 
-    # (⭐ 핵심 추가 1) 질문 재구성 함수
-    def _rewrite_query_with_history(self, query: str, chat_history: list):        
-        """이전 대화 기록을 바탕으로 현재 질문을 완전한 검색용 질문으로 재구성합니다."""
-        if not chat_history:
-            return query  # 대화 기록이 없으면 원본 질문 사용
-
-        # ✅ content/parts 어느 쪽이 와도 안전하게 텍스트를 추출
-        def _msg_text(msg: dict) -> str:
-            if "content" in msg:
-                return str(msg["content"])
+    def _rewrite_query_with_history(self, query: str, chat_history: list):
+        if not chat_history: return query
+        
+        def _get_message_text(msg: dict) -> str:
+            if "content" in msg: return str(msg["content"])
             parts = msg.get("parts")
-            if isinstance(parts, list):
-                return "".join(str(p) for p in parts)
+            if isinstance(parts, list): return "".join(str(p) for p in parts)
             return str(parts) if parts is not None else ""
 
-        lines = []
-        for m in chat_history:
-            role = m.get("role")
-            speaker = "사용자" if role == "user" else "진묘"
-            lines.append(f"{speaker}: {_msg_text(m)}")
-        formatted_history = "\n".join(lines)
-
+        formatted_history = "\n".join([f"사용자: {_get_message_text(msg)}" if msg.get('role') == 'user' else f"진묘: {_get_message_text(msg)}" for msg in chat_history])
+        
         rewrite_prompt = f"""이전 대화 내용은 다음과 같습니다:
 ---
 {formatted_history}
@@ -75,30 +64,29 @@ class RAGChatbot:
 """
         try:
             response = self.llm_model.generate_content(rewrite_prompt)
-            rewritten = (response.text or "").strip().replace('"', "")
-            return rewritten or query
+            rewritten_query = response.text.strip().replace('"', '')
+            print(f"  ✍️ 질문 재구성: '{query}' -> '{rewritten_query}'")
+            return rewritten_query
         except Exception as e:
-            print(f"🚨 질문 재구성 중 오류: {e}")
+            print(f"🚨 질문 재구성 중 오류 발생: {e}")
             return query
 
-    
-    def _semantic_route_query(self, query: str): # (⭐ 수정) 이제 대화 기록이 필요 없음
+    def _semantic_route_query(self, query: str):
         routing_prompt = f"""당신은 사용자의 질문 의도를 분석하는 라우팅 전문가입니다.
 [사용자 질문]을 보고, 의도를 아래 [질문 유형] 중 하나로 분류하여 JSON 형식으로만 답변해주세요.
-
+[중요 규칙]
+- '무령왕릉' 자체의 발견, 역사, 배경 등에 대한 질문은 '역사_배경'으로 분류해야 합니다.
+- '무령왕릉 지석', '무령왕릉 석수' 등 '무령왕릉' 뒤에 다른 단어가 붙는 경우는 '유물_상세정보'로 분류할 수 있습니다.
 [질문 유형]
 - "유물_상세정보": 특정 유물 하나에 대한 상세 정보(모양, 재질, 출토 위치 등)를 묻는 질문.
 - "역사_배경": 특정 시대, 사건, 기술, 문화 등 포괄적인 역사적 배경이나 지식을 묻는 질문.
 - "유물_비교": 두 개 이상의 유물을 비교해달라는 질문.
 - "단순_대화": 정보 검색이 필요 없는 일반적인 대화 (인사, 감사 등).
-
 [사용자 질문]
 "{query}"
-
-[분석 결과 (JSON 형식)]
 """
         try:
-            response = self.llm_model.generate_content(f'{routing_prompt}\n{{\n  "classification": "...",\n  "reason": "..."\n}}')
+            response = self.llm_model.generate_content(f'{routing_prompt}\n[분석 결과 (JSON 형식)]\n{{\n  "classification": "...",\n  "reason": "..."\n}}')
             json_text = response.text.strip().replace('```json', '').replace('```', '').strip()
             route_result = json.loads(json_text)
             classification = route_result.get("classification", "역사_배경")
@@ -122,24 +110,28 @@ class RAGChatbot:
         else:
             return []
 
-    def ask(self, query: str, chat_history: list | None = None):
-        if chat_history is None:
-            chat_history = []
+    def ask(self, query: str, chat_history: list = []):
         if not self.llm_model: return {"error": "Gemini 모델이 초기화되지 않았습니다."}
         
-        # (⭐ 핵심 추가 2) 라우팅 전에 질문 재구성 실행
-        rewritten_query = self._rewrite_query_with_history(query, chat_history)
+        # (⭐ 핵심 수정) 질문 재구성 단계에 '안전장치' 추가
+        is_specific_query = any(name in query for name in self.artifact_df['명칭'].tolist())
         
+        # 질문이 이미 명확한 유물 이름을 포함하고 있다면, 굳이 재구성하지 않음
+        if is_specific_query and len(query) > 4:
+             rewritten_query = query
+             print(f"  ✍️ 질문이 명확하여 재구성 생략: '{query}'")
+        else:
+             rewritten_query = self._rewrite_query_with_history(query, chat_history)
+
         route = self._semantic_route_query(rewritten_query)
         
         if route == "단순_대화":
             try:
-                response = self.llm_model.generate_content(f"사용자가 다음과 같이 말했습니다: '{query}'. 간단하고 친절하게 답변해주세요.")
+                response = self.llm_model.generate_content(f"사용자가 다음과 같이 말했습니다: '{query}'. 자세하고 친절하게 답변해주세요.")
                 return {"answer": response.text, "metadata": []}
             except Exception as e:
                 return {"error": f"Gemini API 호출 중 오류 발생: {e}"}
 
-        # 재구성된 질문으로 검색
         retrieved_docs = self._search(rewritten_query, route)
         
         context_for_llm = ""
@@ -147,16 +139,25 @@ class RAGChatbot:
             source = doc.get('source_file', '유물 DB: ' + doc.get('명칭', ''))
             context_for_llm += f"### 참고 자료 (출처: {source}) ###\n"
             context_for_llm += f"내용: {doc.get('rag_document') or doc.get('text_chunk')}\n"
+            if '소장품번호' in doc and doc['소장품번호']: context_for_llm += f"소장품번호: {doc['소장품번호']}\n"
             if 'MUCH_URL' in doc and doc['MUCH_URL']: context_for_llm += f"관련 링크: {doc['MUCH_URL']}\n"
-            if 'id' in doc and doc['id']: context_for_llm += f"유물 ID: {doc['id']}\n"
             context_for_llm += "\n"
         
-        # 최종 프롬프트에는 전체 대화 기록과 원본 질문을 사용
-        formatted_history = "\n".join([f"사용자: {msg['content']}" if msg['role'] == 'user' else f"진묘: {msg['content']}" for msg in chat_history])
+        def _msg_text_for_prompt(msg: dict) -> str:
+            if "content" in msg: return str(msg["content"])
+            parts = msg.get("parts")
+            if isinstance(parts, list): return "".join(str(p) for p in parts)
+            return str(parts) if parts is not None else ""
+
+        formatted_history = "\n".join([("사용자: " if (m.get("role") == "user") else "진묘: ") + _msg_text_for_prompt(m) for m in chat_history])
+        
         prompt = f"""당신은 국립공주박물관의 전문 AI 도슨트입니다.
 당신의 임무는 반드시 아래 [이전 대화 내용]과 [참고 자료]에만 근거하여 사용자의 마지막 [질문]에 대해 답변하는 것입니다.
 답변은 친절하고 이해하기 쉬운 설명체로 작성해주세요.
 자료에 없는 내용은 절대로 지어내지 말고, "자료에 없는 내용이라 답변할 수 없습니다."라고 솔직하게 답변하세요.
+[중요 규칙]
+- 일반적인 유물 설명에는 절대로 '소장품번호'와 같은 내부 관리 번호를 포함하지 마세요.
+- 단, 사용자가 '유물번호'나 '소장품번호'를 명시적으로 물어보는 경우에만, 참고 자료에 있는 '소장품번호' 값을 사용하여 답변해야 합니다.
 
 ---
 [이전 대화 내용]
@@ -178,3 +179,4 @@ class RAGChatbot:
             return {"error": f"Gemini API 호출 중 오류 발생: {e}"}
 
 chatbot_instance = RAGChatbot()
+
